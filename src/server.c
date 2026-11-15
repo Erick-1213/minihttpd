@@ -3,12 +3,16 @@
 #include <netdb.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
+
 
 int crear_socket() {
 
-    struct addrinfo hints = {0};
+    struct addrinfo hints;
     struct addrinfo *res;
     int s, sd, resultBind, resultListen;
+
+	memset(&hints, 0, sizeof(hints));
 
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
