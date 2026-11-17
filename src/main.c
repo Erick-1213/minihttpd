@@ -138,6 +138,18 @@ int main(void){
 								if (fin == 0){
 									break;
 								}
+								SolicitudHTTP solicitud;
+								int resultado = analizar_solicitud(actual->buffer, fin, &solicitud);
+								if (resultado == -1){
+									printf("Solicitud HTTP inválida\n");
+								} else {
+									printf("Método: %s\n", solicitud.metodo);
+									printf("Ruta: %s\n", solicitud.ruta);
+									printf("Versión: %s\n", solicitud.version);
+									printf("Host: %s\n", solicitud.host);
+									printf("Connection: %s\n", solicitud.connection);
+									printf("User-Agent: %s\n", solicitud.user_agent);
+								}
 								fwrite(actual->buffer, 1, fin, stdout);
 								size_t sobrante = actual->usados - fin;
 								memmove(actual->buffer, actual->buffer + fin, sobrante);

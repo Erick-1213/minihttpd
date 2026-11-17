@@ -15,4 +15,16 @@ typedef struct {
 size_t fin_cabezera(const char *buffer, size_t usados);
 int construir_error(char *buffer, size_t capacidad, int codigo, const char *mensaje);
 
+typedef struct {
+    char metodo[16];
+    char ruta[256];
+    char version[16];
+
+    char host[256];
+    char connection[32];
+    char user_agent[512];
+} SolicitudHTTP;
+
+int analizar_solicitud(const char *buffer, size_t longitud, SolicitudHTTP *solicitud);
+
 #endif
