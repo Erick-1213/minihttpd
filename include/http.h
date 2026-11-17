@@ -10,6 +10,10 @@ typedef struct {
     int es_servidor;
     char buffer[BUFFER_SIZE];
     size_t usados;
+    char respuesta[BUFFER_SIZE];
+    size_t longitud_respuesta;
+    size_t enviados;
+    int cerrar;
 }Cliente;
 
 size_t fin_cabezera(const char *buffer, size_t usados);

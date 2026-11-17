@@ -90,7 +90,6 @@ int analizar_solicitud(const char *buffer, size_t longitud, SolicitudHTTP *solic
     memcpy(solicitud->metodo, buffer, longitud_metodo);
     memcpy(solicitud->ruta, buffer + espacio1 + 1, longitud_ruta);
     memcpy(solicitud->version, buffer + espacio2 + 1, longitud_version);
-    return 0; 
 
     size_t posicion = fin_linea + 2;
     while (posicion < longitud){
