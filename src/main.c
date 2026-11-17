@@ -1,9 +1,13 @@
 #include "server.h"
+#include "http.h"
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MAX_EVENTS 20
 
@@ -11,7 +15,6 @@ int main(void){
 
 	int sd, epsd, nfds, flags, nsd;
 	struct epoll_event ev, events[MAX_EVENTS];
-	char buffer[1024];
 	ssize_t n;
 
 	sd = crear_socket();
@@ -40,8 +43,12 @@ int main(void){
 		return 1; 
 	}
 
+	Cliente servidor = {0};
+	servidor.fd = sd;
+	servidor.es_servidor = 1;
+
 	ev.events = EPOLLIN;
-	ev.data.fd = sd;
+	ev.data.ptr = &servidor;
 	if (epoll_ctl(epsd, EPOLL_CTL_ADD, sd, &ev) == -1) {
 		perror("Error en epoll_ctl");
 		close(sd);
@@ -60,7 +67,8 @@ int main(void){
 		}
 
 		for (int i = 0; i < nfds; i++) {
-			if(events[i].data.fd == sd){
+			Cliente *actual = events[i].data.ptr;
+			if(actual->es_servidor == 1){
 				while(1){
 					nsd = accept(sd, NULL, NULL);
 					if (nsd == -1) {
@@ -70,11 +78,25 @@ int main(void){
 						if (errno == EAGAIN || errno == EWOULDBLOCK) {
 							break;
 						}
+						perror("Error al aceptar la conexión");
+						break;
 					}
+
+					Cliente *cliente = calloc(1, sizeof(Cliente));
+					if (cliente == NULL) {
+						perror("Error al asignar memoria para el cliente");
+						close(nsd);
+						continue;
+					}
+					cliente->fd = nsd;
+					cliente->es_servidor = 0;	
+					cliente->usados = 0;
+
 					flags = fcntl(nsd, F_GETFL, 0);
 					if (flags == -1) {
 					perror("Error al obtener las banderas del socket");
 					close(nsd);
+					free(cliente);
 					continue;
 					}
 					if (fcntl(nsd, F_SETFL, flags | O_NONBLOCK) == -1) {
@@ -83,17 +105,18 @@ int main(void){
 						continue;
 					}
 
-					ev.events = EPOLLIN | EPOLLET;
-					ev.data.fd = nsd;
+					ev.events = EPOLLIN | EPOLLRDHUP;
+					ev.data.ptr = cliente;
 
 					if (epoll_ctl(epsd, EPOLL_CTL_ADD, nsd, &ev) == -1) {
 						perror("Error en epoll_ctl");
 						close(nsd);
+						free(cliente);
 						continue;
 					}
 				}
 			} else {
-				int client_fd = events[i].data.fd;
+				int client_fd = actual->fd;
 				int cerrar_cliente = 0;
 
 				if (events[i].events & (EPOLLERR| EPOLLHUP)) {
@@ -101,9 +124,25 @@ int main(void){
 				}
 				if (!cerrar_cliente){
 					while (1){
-						n = read(client_fd, buffer, sizeof(buffer));
+						if(actual->usados >= BUFFER_SIZE){
+							fprintf(stderr, "Buffer lleno\n");
+							cerrar_cliente = 1;
+							break;
+						}
+						n = read(actual->fd, actual->buffer + actual->usados, BUFFER_SIZE - actual->usados);
 						if (n > 0){
-							fwrite(buffer, 1, (size_t)n, stdout);
+							actual->usados += (size_t)n;
+
+							while (1){
+								size_t fin = fin_cabezera(actual->buffer, actual->usados);
+								if (fin == 0){
+									break;
+								}
+								fwrite(actual->buffer, 1, fin, stdout);
+								size_t sobrante = actual->usados - fin;
+								memmove(actual->buffer, actual->buffer + fin, sobrante);
+								actual->usados = sobrante;
+							}
 						}else if (n == 0){
 							cerrar_cliente = 1;
 							break;
@@ -127,12 +166,14 @@ int main(void){
 					if (epoll_ctl(epsd, EPOLL_CTL_DEL, client_fd, NULL) == -1) {
 						perror("Error en epoll_ctl al eliminar el cliente");
 					}
-					close(client_fd);
+					close(actual->fd);
+					free(actual);
 				}
-			}	
-		}
-	}
-	close(sd);
+			}
+		}	
+	}	
 	close(epsd);
-	return 1;
+    close(sd);
+
+    return 1;	
 }
