@@ -20,12 +20,20 @@ size_t fin_cabezera(const char *buffer, size_t usados) {
 }
 
 int construir_error(char *buffer, size_t capacidad, int codigo, const char *mensaje) {
+     const char *allow = "";
+
+    if (codigo == 405) {
+        allow = "Allow: GET\r\n";
+    }
+    
     int n = snprintf(buffer, capacidad,
                     "HTTP/1.1 %d %s\r\n"
+                    "%s"
                     "Content-Length: 0\r\n"
                     "Connection: close\r\n"
                     "\r\n",
-                    codigo, mensaje);
+                    codigo, mensaje, allow);
+
     if (n<0 || (size_t)n >= capacidad) {
         return -1; 
     }

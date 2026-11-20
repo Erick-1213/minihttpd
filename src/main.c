@@ -169,20 +169,27 @@ int main(void){
         								size_t longitud_archivo = 0;
 
 										int archivo = leer_archivo(solicitud.ruta, contenido, sizeof(contenido), &longitud_archivo);
-										if(archivo == -1){
-											
-											int longitud = construir_error (actual->respuesta, BUFFER_SIZE, 404,"Not Found");
+										if (archivo != FILES_OK) {											
+											const char *mensaje;
+
+										if (archivo == FILES_FORBIDDEN) {
+											mensaje = "Forbidden";
+										} else if (archivo == FILES_NOT_FOUND) {
+											mensaje = "Not Found";
+										} else {
+											mensaje = "Internal Server Error";
+										}
+											int longitud = construir_error (actual->respuesta, BUFFER_SIZE, archivo,mensaje);
 											if (longitud == -1) {
 											cerrar_cliente = 1;
 											break;
 											}					
 											actual->longitud_respuesta = (size_t)longitud;
-
 										}else{
 											const char *mime = obtener_mime(solicitud.ruta);
 											int longitud = construir_respuesta(actual->respuesta,BUFFER_SIZE,contenido,longitud_archivo,mime);
 											if(longitud==-1){
-												cerrar_cliente = -1;
+												cerrar_cliente = 1;
 												break;
 											}
 											actual->longitud_respuesta = (size_t)longitud;

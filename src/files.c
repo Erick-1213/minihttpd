@@ -12,18 +12,24 @@ int leer_archivo(const char *ruta, char *contenido,size_t capacidad, size_t *lon
     }
     *longitud = 0;
     if(ruta[0] == '\0' || strstr(ruta, "..") != NULL || strchr(ruta, '\\') != NULL) {
-        return -1; 
+        return FILES_FORBIDDEN; 
     }
 
     char ruta_completa[512];
-    int n = snprintf(ruta_completa, sizeof(ruta_completa), "www/%s", strcmp(ruta, "/") == 0 ? "index.html" : ruta);
+    int n = snprintf(ruta_completa, sizeof(ruta_completa), "www/%s", strcmp(ruta, "/") == 0 ? "/index.html" : ruta);
     if (n < 0 || (size_t)n >= sizeof(ruta_completa)) {
         return -1;
     }
     int fd = open(ruta_completa, O_RDONLY | O_NOFOLLOW);
 
     if (fd == -1) {
-        return -1;
+    if (errno == ENOENT || errno == ENOTDIR) {
+        return FILES_NOT_FOUND;
+    }
+    if (errno == EACCES || errno == EPERM || errno == ELOOP) {
+        return FILES_FORBIDDEN;
+    }
+    return FILES_INTERNAL_ERROR;
     }
 
     while (*longitud < capacidad) {
@@ -41,7 +47,7 @@ int leer_archivo(const char *ruta, char *contenido,size_t capacidad, size_t *lon
 
         if (leidos == 0) {
             close(fd);
-            return 0;
+            return FILES_OK;
         }
 
         if (errno == EINTR) {
@@ -61,7 +67,7 @@ int leer_archivo(const char *ruta, char *contenido,size_t capacidad, size_t *lon
 
     close(fd);
 
-    return leidos == 0 ? 0 : -1;
+    return leidos == 0 ? FILES_OK : FILES_INTERNAL_ERROR;
 }
 
 
