@@ -157,7 +157,7 @@ int analizar_solicitud(const char *buffer, size_t longitud, SolicitudHTTP *solic
     return 0; 
 }
 
-int construir_respuesta(char *respuesta, size_t capacidad, const char *contenido, size_t longitud, const char *mime) {
+int construir_respuesta(char *respuesta, size_t capacidad, const char *contenido, size_t longitud, const char *mime, int cerrar) {
     if (respuesta == NULL || contenido == NULL || mime == NULL) {
         return -1;
     }
@@ -168,10 +168,11 @@ int construir_respuesta(char *respuesta, size_t capacidad, const char *contenido
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: %s\r\n"
         "Content-Length: %zu\r\n"
-        "Connection: close\r\n"
+        "Connection: %s\r\n"
         "\r\n",
         mime,
-        longitud
+        longitud,
+        cerrar ? "close" : "keep-alive"
     );
 
     if (cabecera < 0 || (size_t)cabecera >= capacidad) {

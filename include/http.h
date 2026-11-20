@@ -18,7 +18,7 @@ typedef struct {
 
 size_t fin_cabezera(const char *buffer, size_t usados);
 int construir_error(char *buffer, size_t capacidad, int codigo, const char *mensaje);
-int construir_respuesta(char *respuesta, size_t capacidad, const char *contenido, size_t longitud, const char *mime);
+int construir_respuesta(char *respuesta, size_t capacidad, const char *contenido, size_t longitud, const char *mime, int cerrar);
 
 
 typedef struct {
