@@ -2,6 +2,7 @@
 #define FILES_H
 
 #include <stddef.h>
+#include <sys/types.h>
 
 #define FILES_OK 0
 #define FILES_FORBIDDEN 403
@@ -13,6 +14,12 @@ int leer_archivo(
     char *contenido,
     size_t capacidad,
     size_t *longitud
+);
+
+int files_abrir(
+    const char *ruta,
+    int *fd_archivo,
+    off_t *tamano
 );
 
 #endif

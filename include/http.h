@@ -2,6 +2,7 @@
 #define HTTP_H
 
 #include <stddef.h>
+#include <sys/types.h>
 
 #define BUFFER_SIZE 8192
 
@@ -14,12 +15,15 @@ typedef struct {
     size_t longitud_respuesta;
     size_t enviados;
     int cerrar;
+    int fd_archivo;
+    off_t bytes_restantes;
 }Cliente;
 
 size_t fin_cabezera(const char *buffer, size_t usados);
 int construir_error(char *buffer, size_t capacidad, int codigo, const char *mensaje);
 int construir_respuesta(char *respuesta, size_t capacidad, const char *contenido, size_t longitud, const char *mime, int cerrar);
-
+int construir_cabecera_archivo(char *respuesta, size_t capacidad, off_t tamano, const char *mime, int cerrar
+);
 
 typedef struct {
     char metodo[16];

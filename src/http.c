@@ -188,4 +188,26 @@ int construir_respuesta(char *respuesta, size_t capacidad, const char *contenido
     return cabecera + (int)longitud;
 }
 
+int construir_cabecera_archivo(char *respuesta, size_t capacidad, off_t tamano, const char *mime, int cerrar) {
+    if (respuesta == NULL || mime == NULL || tamano < 0) {
+        return -1;
+    }
+
+    int n = snprintf(respuesta, capacidad,
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %lld\r\n"
+        "Connection: %s\r\n"
+        "\r\n",
+        mime, (long long)tamano,
+        cerrar ? "close" : "keep-alive"
+    );
+
+    if (n < 0 || (size_t)n >= capacidad) {
+        return -1;
+    }
+
+    return n;
+}
+
 

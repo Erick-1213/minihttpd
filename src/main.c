@@ -12,12 +12,15 @@
 #include <string.h>
 #include <strings.h>
 #include <signal.h>
+#include <sys/sendfile.h>
 
 #define MAX_EVENTS 20
+#define MAX_CLIENTES 20
 
 int main(void){
 
 	int sd, epsd, nfds, flags, nsd;
+	int clientes_activos = 0;
 	struct epoll_event ev, events[MAX_EVENTS];
 	ssize_t n;
 
@@ -87,7 +90,11 @@ int main(void){
 						perror("Error al aceptar la conexión");
 						break;
 					}
-
+					if (clientes_activos >= MAX_CLIENTES) {
+						printf("20 clientes alcanzado");
+						close(nsd);
+						continue;
+					}
 					Cliente *cliente = calloc(1, sizeof(Cliente));
 					if (cliente == NULL) {
 						perror("Error al asignar memoria para el cliente");
@@ -97,6 +104,9 @@ int main(void){
 					cliente->fd = nsd;
 					cliente->es_servidor = 0;	
 					cliente->usados = 0;
+
+					cliente->fd_archivo = -1;
+					cliente->bytes_restantes = 0;
 
 					flags = fcntl(nsd, F_GETFL, 0);
 					if (flags == -1) {
@@ -121,6 +131,8 @@ int main(void){
 						free(cliente);
 						continue;
 					}
+					clientes_activos++;
+					printf("Clientes: %d\n", clientes_activos);
 				}
 			} else {
 				int client_fd = actual->fd;
@@ -163,13 +175,14 @@ int main(void){
 									} 
 									actual->longitud_respuesta = (size_t)longitud;
 								} else {
-									char contenido[BUFFER_SIZE];
-									size_t longitud_archivo = 0;
+									int fd_archivo = -1;
+									off_t tamano = 0;
+									/*char contenido[BUFFER_SIZE];
+									size_t longitud_archivo = 0;*/
 
-									int archivo = leer_archivo(solicitud.ruta, contenido, sizeof(contenido), &longitud_archivo);
+									int archivo = files_abrir(solicitud.ruta, &fd_archivo, &tamano);
 									if (archivo != FILES_OK) {											
 										const char *mensaje;
-
 										if (archivo == FILES_FORBIDDEN) {
 											mensaje = "Forbidden";
 										} else if (archivo == FILES_NOT_FOUND) {
@@ -178,7 +191,6 @@ int main(void){
 											archivo = FILES_INTERNAL_ERROR;
 											mensaje = "Internal Server Error";
 											}
-											
 											int longitud = construir_error (actual->respuesta, BUFFER_SIZE, archivo,mensaje);
 											if (longitud == -1) {
 												cerrar_cliente = 1;
@@ -187,11 +199,13 @@ int main(void){
 											actual->longitud_respuesta = (size_t)longitud;
 										}else{
 											const char *mime = obtener_mime(solicitud.ruta);
-											int longitud = construir_respuesta(actual->respuesta,BUFFER_SIZE,contenido,longitud_archivo,mime, cerrar);
+											int longitud = construir_cabecera_archivo(actual->respuesta, BUFFER_SIZE, tamano, mime, cerrar);
 											if(longitud==-1){
 												cerrar_cliente = 1;
 												break;
 											}
+											actual->fd_archivo = fd_archivo;
+											actual->bytes_restantes = tamano;
 											actual->cerrar = cerrar;
 											actual->longitud_respuesta = (size_t)longitud;
 										}
@@ -277,8 +291,51 @@ int main(void){
 						cerrar_cliente = 1;
 						break;
 					}
-					if (!cerrar_cliente && actual->enviados == actual->longitud_respuesta){
-						printf("Respuesta enviada correctamente\n");
+					if (!cerrar_cliente && actual->enviados == actual->longitud_respuesta && actual->fd_archivo != -1){
+						size_t enviados_evento = 0;
+						while (actual->bytes_restantes > 0 && enviados_evento < 65536) {
+							size_t bloque = 16384;
+
+							if (actual->bytes_restantes < (off_t)bloque) {
+                                bloque = (size_t)actual->bytes_restantes;
+                            }
+                            if (bloque > 65536 - enviados_evento) {
+                                bloque = 65536 - enviados_evento;
+                            }
+                            ssize_t escritos = sendfile(actual->fd,actual->fd_archivo,NULL,bloque);
+
+                            if (escritos > 0) {
+                                actual->bytes_restantes -= (off_t)escritos;
+                                enviados_evento += (size_t)escritos;
+                                continue;
+                            }
+                            if (escritos == -1 && errno == EINTR) {
+                                continue;
+                            }
+                            if (escritos == -1 &&
+                                (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                                break;
+                            }
+
+                            if (escritos == 0) {
+                                fprintf(stderr, "Archivo truncado durante el envio\n");
+                            } else {
+                                perror("Error en sendfile");
+                            }
+                            cerrar_cliente = 1;
+                            break;
+                        }
+					}
+					if (!cerrar_cliente &&
+                        actual->enviados == actual->longitud_respuesta &&
+                        actual->bytes_restantes == 0) {
+
+                        if (actual->fd_archivo != -1) {
+                            close(actual->fd_archivo);
+                            actual->fd_archivo = -1;
+                        }
+						printf("Respuesta enviada correctamente\n"); 
+
 						if (actual->cerrar){
 							cerrar_cliente = 1;
 						}else{
@@ -299,11 +356,16 @@ int main(void){
 					}
 				}
 				if (cerrar_cliente){
+					if (actual->fd_archivo != -1) {
+						close(actual->fd_archivo);
+						actual->fd_archivo = -1;
+					}
 					if (epoll_ctl(epsd, EPOLL_CTL_DEL, client_fd, NULL) == -1) {
 						perror("Error en epoll_ctl al eliminar el cliente");
 					}
 					close(client_fd);
 					free(actual);
+					clientes_activos--;
 				}
 			}
 		}

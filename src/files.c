@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/stat.h>
 
 
 int leer_archivo(const char *ruta, char *contenido,size_t capacidad, size_t *longitud) {
@@ -68,6 +69,51 @@ int leer_archivo(const char *ruta, char *contenido,size_t capacidad, size_t *lon
     close(fd);
 
     return leidos == 0 ? FILES_OK : FILES_INTERNAL_ERROR;
+}
+
+int files_abrir(const char *ruta, int *fd_archivo, off_t *tamano){
+    if (ruta == NULL || fd_archivo == NULL || tamano == NULL) {
+        return FILES_INTERNAL_ERROR;
+    }
+    *fd_archivo = -1;
+    *tamano = 0;
+
+    if (ruta[0] != '/' ||
+        strstr(ruta, "..") != NULL ||
+        strchr(ruta, '\\') != NULL) {
+        return FILES_FORBIDDEN;
+    }
+    char ruta_completa[512];
+    int n = snprintf(ruta_completa, sizeof(ruta_completa), "www/%s", strcmp(ruta, "/") == 0 ? "index.html" : ruta);
+    if (n < 0 || (size_t)n >= sizeof(ruta_completa)) {
+        return FILES_INTERNAL_ERROR;
+    }
+    int fd= open(ruta_completa, O_RDONLY | O_NOFOLLOW);
+    if (fd == -1) {
+
+        if (errno == ENOENT || errno == ENOTDIR) {
+            return FILES_NOT_FOUND;
+        }
+
+        if (errno == EACCES || errno == EPERM || errno == ELOOP) {
+            return FILES_FORBIDDEN;
+        }
+
+        return FILES_INTERNAL_ERROR;
+    }
+    struct stat datos;
+
+    if (fstat(fd, &datos) == -1) {
+        close(fd);
+        return FILES_INTERNAL_ERROR;
+    }
+    if (!S_ISREG(datos.st_mode)) {
+        close(fd);
+        return FILES_FORBIDDEN;
+    }
+    *fd_archivo = fd;
+    *tamano = datos.st_size;
+    return FILES_OK;
 }
 
 
