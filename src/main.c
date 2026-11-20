@@ -1,5 +1,7 @@
 #include "server.h"
 #include "http.h"
+#include "files.h"
+#include "mime.h"
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <stdio.h>
@@ -150,43 +152,75 @@ int main(void){
 										cerrar_cliente = 1;
 										break;
 									}
+								
 									actual->longitud_respuesta = (size_t)longitud;
-									actual->enviados = 0;
-									actual->cerrar = 1;
 
-									ev.events = EPOLLOUT | EPOLLRDHUP;
-									ev.data.ptr = actual;
+								}else {
+									if (strcmp(solicitud.metodo, "GET")!=0){
+										int longitud = construir_error(actual->respuesta, BUFFER_SIZE,405, "Method NOt Allowed");
+										
+										if (longitud == -1) {
+										cerrar_cliente = 1;
+										break;
+										} 
+										actual->longitud_respuesta = (size_t)longitud;
+									} else {
+										char contenido[BUFFER_SIZE];
+        								size_t longitud_archivo = 0;
+
+										int archivo = leer_archivo(solicitud.ruta, contenido, sizeof(contenido), &longitud_archivo);
+										if(archivo == -1){
+											
+											int longitud = construir_error (actual->respuesta, BUFFER_SIZE, 404,"Not Found");
+											if (longitud == -1) {
+											cerrar_cliente = 1;
+											break;
+											}					
+											actual->longitud_respuesta = (size_t)longitud;
+
+										}else{
+											const char *mime = obtener_mime(solicitud.ruta);
+											int longitud = construir_respuesta(actual->respuesta,BUFFER_SIZE,contenido,longitud_archivo,mime);
+											if(longitud==-1){
+												cerrar_cliente = -1;
+												break;
+											}
+											actual->longitud_respuesta = (size_t)longitud;
+										}
+									}
+								}
+								actual ->enviados=0;
+								actual ->cerrar =1;
+
+								ev.events = EPOLLOUT | EPOLLRDHUP;
+								ev.data.ptr = actual;
+
 									if (epoll_ctl(epsd, EPOLL_CTL_MOD, client_fd, &ev) == -1) {
 										perror("Error en epoll_ctl al modificar el cliente");
 										cerrar_cliente = 1;
 									}
 								    break;
 								}
-								fwrite(actual->buffer, 1, fin, stdout);
-								size_t sobrante = actual->usados - fin;
-								memmove(actual->buffer, actual->buffer + fin, sobrante);
-								actual->usados = sobrante;
-							}
-							if (cerrar_cliente||actual->longitud_respuesta > 0){
-								break;
-							}
-						}else if (n == 0){
+								if (cerrar_cliente || actual->longitud_respuesta > 0) {
+                                break;
+                            	}
+						}else if(n==0){
 							cerrar_cliente = 1;
 							break;
 						}else{
-							if (errno == EINTR) {
+							if(errno == EINTR){
 								continue;
 							}
-							if (errno == EAGAIN || errno == EWOULDBLOCK) {
-								break;							
+							if(errno == EAGAIN ||  errno == EWOULDBLOCK){
+								break;
 							}
-							perror("Error al leer del cliente");
+							perror("Error al leer el cliente");
 							cerrar_cliente = 1;
 							break;
 						}
 					}
 				}
-				if((events[i].events & EPOLLRDHUP)&& actual->longitud_respuesta == 0){
+				if((events[i].events & EPOLLRDHUP) && actual->longitud_respuesta == 0){
 						cerrar_cliente = 1;
 				}
 				if(!cerrar_cliente &&(events[i].events & EPOLLOUT) && actual->longitud_respuesta > 0){
@@ -214,6 +248,7 @@ int main(void){
 						}else{
 							actual->longitud_respuesta = 0;
 							actual->enviados = 0;
+							
 							ev.events = EPOLLIN | EPOLLRDHUP;
 							ev.data.ptr = actual;
 							if (epoll_ctl(epsd, EPOLL_CTL_MOD, client_fd, &ev) == -1) {

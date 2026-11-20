@@ -8,7 +8,7 @@ size_t fin_cabezera(const char *buffer, size_t usados) {
     for (size_t i = 0; i + 3 < usados; i++) {
 
         if (buffer[i] == '\r' &&
-            buffer[i + 1] == '\n' &&
+            buffer[i + 1    ] == '\n' &&
             buffer[i + 2] == '\r' &&
             buffer[i + 3] == '\n') {
 
@@ -147,6 +147,36 @@ int analizar_solicitud(const char *buffer, size_t longitud, SolicitudHTTP *solic
     }
 
     return 0; 
+}
+
+int construir_respuesta(char *respuesta, size_t capacidad, const char *contenido, size_t longitud, const char *mime) {
+    if (respuesta == NULL || contenido == NULL || mime == NULL) {
+        return -1;
+    }
+
+    int cabecera = snprintf(
+        respuesta,  
+        capacidad,
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %zu\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        mime,
+        longitud
+    );
+
+    if (cabecera < 0 || (size_t)cabecera >= capacidad) {
+        return -1;
+    }
+
+    if (longitud > capacidad - (size_t)cabecera) {
+        return -1;
+    }
+
+    memcpy(respuesta + cabecera, contenido, longitud);
+
+    return cabecera + (int)longitud;
 }
 
 

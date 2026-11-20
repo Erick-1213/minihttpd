@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 8192
 
 typedef struct {
     int fd;
